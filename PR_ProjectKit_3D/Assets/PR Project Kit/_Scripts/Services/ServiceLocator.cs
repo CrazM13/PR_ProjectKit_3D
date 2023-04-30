@@ -22,16 +22,16 @@ public class ServiceLocator : MonoBehaviour {
 	#endregion
 
 	#region Services
-	// TODO
+	public static PRSceneManager SceneManager;
 	#endregion
 
 	#region Load/Unload Services
 	private void LocateServices() {
-
+		SceneManager = FindAnyObjectByType<PRSceneManager>();
 	}
 
 	private void ForgetServices() {
-
+		SceneManager = null;
 	}
 	#endregion
 }
