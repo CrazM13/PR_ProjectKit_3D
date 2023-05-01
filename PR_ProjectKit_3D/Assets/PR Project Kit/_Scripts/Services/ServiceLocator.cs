@@ -23,15 +23,18 @@ public class ServiceLocator : MonoBehaviour {
 
 	#region Services
 	public static PRSceneManager SceneManager;
+	public static PRAudioManager AudioManager;
 	#endregion
 
 	#region Load/Unload Services
 	private void LocateServices() {
-		SceneManager = FindAnyObjectByType<PRSceneManager>();
+		SceneManager = FindObjectOfType<PRSceneManager>();
+		AudioManager = FindObjectOfType<PRAudioManager>();
 	}
 
 	private void ForgetServices() {
 		SceneManager = null;
+		AudioManager = null;
 	}
 	#endregion
 }
