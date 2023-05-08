@@ -25,12 +25,12 @@ public class CustomInputSetPropertyDrawer : PropertyDrawer {
 		currentLine++;
 
 		CustomInputSet.AxisOverrideType overrideType = (CustomInputSet.AxisOverrideType) overrideAxis.enumValueIndex;
-		if (overrideType != CustomInputSet.AxisOverrideType.KeycodeOnly) {
+		if (overrideType == CustomInputSet.AxisOverrideType.AxisOnly || overrideType == CustomInputSet.AxisOverrideType.AxisAndKeycode) {
 			EditorGUI.PropertyField(GetRectByLine(position, currentLine, true), axisName);
 			currentLine++;
 		}
 
-		if (overrideType != CustomInputSet.AxisOverrideType.AxisOnly) {
+		if (overrideType == CustomInputSet.AxisOverrideType.KeycodeOnly || overrideType == CustomInputSet.AxisOverrideType.AxisAndKeycode) {
 			EditorGUI.PropertyField(GetRectByLine(position, currentLine, true), positiveKey);
 			EditorGUI.PropertyField(GetRectByLine(position, currentLine + 1, true), negativeKey);
 		}
@@ -43,8 +43,9 @@ public class CustomInputSetPropertyDrawer : PropertyDrawer {
 		CustomInputSet.AxisOverrideType overrideType = (CustomInputSet.AxisOverrideType) overrideAxis.enumValueIndex;
 
 		int totalLines = 2;
-		if (overrideType != CustomInputSet.AxisOverrideType.KeycodeOnly) totalLines += 1;
-		if (overrideType != CustomInputSet.AxisOverrideType.AxisOnly) totalLines += 2;
+		if (overrideType == CustomInputSet.AxisOverrideType.AxisOnly) totalLines += 1;
+		if (overrideType == CustomInputSet.AxisOverrideType.KeycodeOnly) totalLines += 2;
+		if (overrideType == CustomInputSet.AxisOverrideType.AxisAndKeycode) totalLines += 3;
 
 		return (EditorGUIUtility.singleLineHeight * totalLines) + (EditorGUIUtility.standardVerticalSpacing * (totalLines - 1));
 	}

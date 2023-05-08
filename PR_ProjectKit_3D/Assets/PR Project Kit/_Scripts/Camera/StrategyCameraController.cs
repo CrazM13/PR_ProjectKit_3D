@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class StrategyCameraController : MonoBehaviour {
+public class StrategyCameraController : CameraControllerBase {
 
 	#region Subclasses
 	[System.Serializable]
@@ -25,8 +25,8 @@ public class StrategyCameraController : MonoBehaviour {
 	[System.Serializable]
 	private class MouseInputSet : InputSet {
 		[Header("Mouse Buttons")]
-		[SerializeField] public int translateMouseButton;
-		[SerializeField] public int rotateMouseButton;
+		[SerializeField] public CustomMouseInput translateMouseButton;
+		[SerializeField] public CustomMouseInput rotateMouseButton;
 	}
 
 	[System.Serializable] 
@@ -114,14 +114,14 @@ public class StrategyCameraController : MonoBehaviour {
 	private void HandleMouseInput() {
 
 		// Translate
-		if (Input.GetMouseButtonDown(mouse.translateMouseButton)) {
+		if (mouse.translateMouseButton.IsButtonDown) {
 			Plane plane = new Plane(Vector3.up, Vector3.zero);
 			Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
 
 			if (plane.Raycast(ray, out float entry)) {
 				dragStartPosition = ray.GetPoint(entry);
 			}
-		} else if (Input.GetMouseButton(mouse.translateMouseButton)) {
+		} else if (mouse.translateMouseButton.IsButton) {
 			Plane plane = new Plane(Vector3.up, Vector3.zero);
 			Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
 
@@ -133,9 +133,9 @@ public class StrategyCameraController : MonoBehaviour {
 		}
 
 		// Rotation
-		if (Input.GetMouseButtonDown(mouse.rotateMouseButton)) {
+		if (mouse.rotateMouseButton.IsButtonDown) {
 			rotateStartPosition = Input.mousePosition;
-		} else if (Input.GetMouseButton(mouse.rotateMouseButton)) {
+		} else if (mouse.rotateMouseButton.IsButton) {
 			Vector3 rotateCurrentPosition = Input.mousePosition;
 			Vector3 rotateDifference = rotateStartPosition - rotateCurrentPosition;
 			rotateStartPosition = rotateCurrentPosition;
@@ -198,6 +198,10 @@ public class StrategyCameraController : MonoBehaviour {
 
 	public void SetFocus(Vector3 position) {
 		focusPoint = position;
+	}
+
+	public override Vector3 GetForwardDirection() {
+		return cameraRig.TransformDirection(Vector3.forward);
 	}
 
 	#endregion

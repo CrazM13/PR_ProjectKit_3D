@@ -235,5 +235,9 @@ MonoBehaviour:
     translateSensitivity: 1
     rotationSensitivity: 0.2
     zoomSensitivity: 10
-    translateMouseButton: 2
-    rotateMouseButton: 1
+    translateMouseButton:
+      mouseButton: 2
+      inputType: 0
+    rotateMouseButton:
+      mouseButton: 1
+      inputType: 0

@@ -8,7 +8,8 @@ public class CustomInputSet {
 	public enum AxisOverrideType {
 		AxisOnly = 0,
 		KeycodeOnly = 1,
-		AxisAndKeycode = 2
+		AxisAndKeycode = 2,
+		Disabled = 9
 	}
 
 	[SerializeField] private string axisName;
