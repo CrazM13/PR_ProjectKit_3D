@@ -1,75 +1,151 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Events;
 
 public class BaseCharacterController : MonoBehaviour {
 
-	#region Enums
-	private enum MovementType {
-		Transform,
-		Rigidbody
+	#region Subclasses
+	[System.Serializable]
+	private class CrouchSettings {
+		[SerializeField] public float speedPercentage = 1;
+		[SerializeField, Min(0.5f)] public float heightPercentage = 1;
 	}
 	#endregion
 
+	#region Enums
+	public enum MovementType {
+		Standard = 0,
+		Sprint = 1,
+		Crouch = 2,
+		Prone = 3
+	}
+	#endregion
+
+	#region Inspector
 	[Header("References")]
 	[SerializeField] private new Rigidbody rigidbody;
+	[SerializeField] private new CapsuleCollider collider;
 
 	[Header("Settings")]
-	[SerializeField] private MovementType movementType;
-
 	[SerializeField] private float movementSpeed = 1;
 	[SerializeField] private AnimationCurve acceleration = AnimationCurve.Constant(0, 1, 1);
 
+	[SerializeField] private float jumpHeight;
+
 	[SerializeField] private string timeChannel = "CharacterTime";
 
-	private float movementTime = 0;
+	[Header("Sprinting")]
+	[SerializeField] private float sprintingSpeedPercentage = 1.25f;
 
-	private Vector3? targetPosition;
+	[Header("Crouching")]
+	[SerializeField] private CrouchSettings crouch;
 
-	public float CurrentSpeed => acceleration.Evaluate(movementTime) * movementSpeed;
+	[Header("Prone")]
+	[SerializeField] private CrouchSettings prone;
+	#endregion
+
+	#region Events
+	public UnityEvent<MovementType, MovementType> OnMovementTypeChange { get; private set; } = new UnityEvent<MovementType, MovementType>();
+	#endregion
 
 	#region Init
 	void Start() {
 		if (!GameTime.DoesChannelExist(timeChannel)) {
 			GameTime.RegisterChannel(timeChannel);
 		}
+
+		InitHitbox();
+
+		OnMovementTypeChange.AddListener(UpdateHitbox);
 	}
 	#endregion
 
 	#region Movement
+	private float movementTime = 0;
+
+	private MovementType currentMovementType = MovementType.Standard;
+
+	private Vector3? targetPosition;
+
+	public float CurrentSpeed => acceleration.Evaluate(movementTime) * movementSpeed * SpeedModifier;
+
+	public float SpeedModifier => currentMovementType switch {
+		MovementType.Sprint => sprintingSpeedPercentage,
+		MovementType.Crouch => crouch.speedPercentage,
+		MovementType.Prone => prone.speedPercentage,
+		_ => 1
+	};
+
 	// Update is called once per frame
-	private void Update() {
-		if (movementType == MovementType.Transform) {
-			if (targetPosition.HasValue) UpdateTransformMovement();
-			else movementTime = 0;
-		}
-	}
-
 	private void FixedUpdate() {
-		if (movementType == MovementType.Rigidbody) {
-			if (targetPosition.HasValue) UpdateRigidbodyMovement();
-			else movementTime = 0;
+		UpdateMovement();
+	}
+
+	private void UpdateMovement() {
+
+		if (targetPosition.HasValue) {
+			movementTime += GameTime.GetDeltaTime(timeChannel);
+
+			Vector3 moveToPosition = Vector3.MoveTowards(transform.position, targetPosition.Value, CurrentSpeed * GameTime.GetFixedDeltaTime(timeChannel));
+
+			rigidbody.MovePosition(moveToPosition);
+			if (transform.position == targetPosition.Value) targetPosition = null;
+		} else movementTime = 0;
+
+		ApplyJump();
+	}
+	#endregion
+
+	#region Jump
+	public bool IsGrounded { get; private set; } = true;
+	
+	private void ApplyJump() {
+		if (!IsGrounded) {
+			//rigidbody.velocity += Physics.gravity * GameTime.GetDeltaTime(timeChannel);
+
+			if (rigidbody.velocity.y <= 0 && CheckGrounded()) {
+				IsGrounded = true;
+				rigidbody.velocity = new Vector3(rigidbody.velocity.x, 0, rigidbody.velocity.z);
+			}
+
 		}
 	}
 
-	private void UpdateTransformMovement() {
-		movementTime += GameTime.GetDeltaTime(timeChannel);
+	private bool CheckGrounded() {
+		return Physics.CheckSphere(new Vector3(collider.bounds.center.x, collider.bounds.min.y - 0.01f, collider.bounds.center.z), 0.01f);
+	}
+	#endregion
 
-		Vector3 frameTarget = Vector3.MoveTowards(transform.position, targetPosition.Value, CurrentSpeed * GameTime.GetDeltaTime(timeChannel));
+	#region Hitbox
+	private Vector3 hitboxCenter;
+	private float hitboxHeight;
 
-		transform.position = frameTarget;
-
-		if (transform.position == targetPosition.Value) targetPosition = null;
+	private void InitHitbox() {
+		hitboxCenter = collider.center;
+		hitboxHeight = collider.height;
 	}
 
-	private void UpdateRigidbodyMovement() {
-		movementTime += GameTime.GetDeltaTime(timeChannel);
+	private void UpdateHitbox(MovementType oldMovementType, MovementType newMovementType) {
+		switch (newMovementType) {
+			case MovementType.Crouch:
+				collider.center = GetNewHitboxCenter(crouch.heightPercentage);
+				collider.height = hitboxHeight * crouch.heightPercentage;
+				break;
+			case MovementType.Prone:
+				collider.center = GetNewHitboxCenter(prone.heightPercentage);
+				collider.height = hitboxHeight * prone.heightPercentage;
+				break;
+			default:
+				collider.center = hitboxCenter;
+				collider.height = hitboxHeight;
+				break;
+		}
+	}
 
-		Vector3 frameTarget = Vector3.MoveTowards(rigidbody.position, targetPosition.Value, CurrentSpeed * GameTime.GetFixedDeltaTime(timeChannel));
+	private Vector3 GetNewHitboxCenter(float modifier) {
+		float newHeight = hitboxHeight * modifier;
+		float difference = hitboxHeight - newHeight;
 
-		rigidbody.MovePosition(frameTarget);
-
-		if (rigidbody.position == targetPosition.Value) targetPosition = null;
+		return hitboxCenter - (0.5f * difference * Vector3.up);
 	}
 	#endregion
 
@@ -83,10 +159,23 @@ public class BaseCharacterController : MonoBehaviour {
 	}
 
 	public void WarpTo(Vector3 newPosition) {
-		if (movementType == MovementType.Transform) transform.position = newPosition;
-		else if (movementType == MovementType.Rigidbody) rigidbody.position = newPosition;
+		rigidbody.position = newPosition;
 		targetPosition = null;
 	}
+
+	public void Jump(float force) {
+		rigidbody.velocity += Vector3.up * (Mathf.Sqrt(-2.0f * Physics2D.gravity.y * (jumpHeight * force)));
+		IsGrounded = false;
+	}
+
+	public void SetMovementType(MovementType newMovementType) {
+		MovementType oldMovementType = currentMovementType;
+		currentMovementType = newMovementType;
+
+		OnMovementTypeChange.Invoke(oldMovementType, currentMovementType);
+	}
+
+	public MovementType GetMovementType() => currentMovementType;
 	#endregion
 
 }

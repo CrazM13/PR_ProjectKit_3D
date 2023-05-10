@@ -10,6 +10,7 @@ public class CustomInputSetPropertyDrawer : PropertyDrawer {
 
 	public override void OnGUI(Rect position, SerializedProperty property, GUIContent label) {
 		EditorGUI.BeginProperty(position, label, property);
+		EditorGUI.indentLevel++;
 
 		// Create property fields.
 
@@ -35,6 +36,7 @@ public class CustomInputSetPropertyDrawer : PropertyDrawer {
 			EditorGUI.PropertyField(GetRectByLine(position, currentLine + 1, true), negativeKey);
 		}
 
+		EditorGUI.indentLevel--;
 		EditorGUI.EndProperty();
 	}
 
