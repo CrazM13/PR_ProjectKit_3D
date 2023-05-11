@@ -40,7 +40,7 @@ public class PlayerDirectControlController : MonoBehaviour {
 
 		Vector3 movement = (forward * verticalMovement.Value + right * horizontalMovement.Value).normalized;
 
-		character.MoveTo(transform.position + (movement * character.CurrentSpeed));
+		character.MoveTo(transform.position + (movement * character.CurrentSpeed * 3f));
 	}
 
 	private void UpdateMovementType() {
