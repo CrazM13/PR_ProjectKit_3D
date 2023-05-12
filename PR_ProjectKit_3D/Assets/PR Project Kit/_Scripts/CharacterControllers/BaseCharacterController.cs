@@ -26,17 +26,25 @@ public class BaseCharacterController : MonoBehaviour {
 		Prone = 3,
 		LedgeGrabbing = 11
 	}
+
+	public enum RotationType {
+		None = 0,
+		Movement = 1,
+		Camera = 2
+	}
 	#endregion
 
 	#region Inspector
 	[Header("References")]
 	[SerializeField] private new Rigidbody rigidbody;
 	[SerializeField] private new CapsuleCollider collider;
+	[SerializeField] private new CameraControllerBase camera;
 
 	[Header("Settings")]
 	[SerializeField] private float movementSpeed = 1;
 	[SerializeField] private AnimationCurve acceleration = AnimationCurve.Constant(0, 1, 1);
 
+	[SerializeField] private RotationType rotationType;
 	[SerializeField] private float stepHeight;
 	[SerializeField] private float jumpHeight;
 
@@ -76,7 +84,7 @@ public class BaseCharacterController : MonoBehaviour {
 
 	private MovementType currentMovementType = MovementType.Standard;
 
-	private Vector3? targetPosition;
+	private Vector3? movementDirection;
 
 	public float CurrentSpeed => acceleration.Evaluate(movementTime) * movementSpeed * SpeedModifier;
 
@@ -89,7 +97,7 @@ public class BaseCharacterController : MonoBehaviour {
 	};
 
 	// Update is called once per frame
-	private void FixedUpdate() {
+	private void Update() {
 		UpdateMovement();
 	}
 
@@ -108,38 +116,50 @@ public class BaseCharacterController : MonoBehaviour {
 		UpdateMovementCooldowns();
 	}
 
-	private bool WillCollide(Vector3 position, Vector3 direction, float padding) {
-		float height = collider.height - stepHeight - padding;
+	private bool WillCollide(Vector3 position, Vector3 direction, float distance, float padding = 0) {
+		RaycastHit[] hits;
+
+		float height = collider.height - padding;
 		float radius = collider.radius - (padding * 0.25f);
-		float maxDistance = CurrentSpeed * GameTime.GetFixedDeltaTime(timeChannel);
+		Vector3 pointOffset = (0.25f * height * Vector3.up);
 
-		Vector3 stepPosition = position + (Vector3.up * stepHeight);
-
-		RaycastHit[] hits = Physics.CapsuleCastAll(stepPosition + (0.25f * height * Vector3.up), stepPosition - (0.25f * height * Vector3.up), radius, direction, maxDistance, -1, QueryTriggerInteraction.Ignore);
+		hits = Physics.CapsuleCastAll(position + pointOffset, position - pointOffset, radius, direction, distance, -1, QueryTriggerInteraction.Ignore);
 
 		foreach (RaycastHit hit in hits) if (hit.collider != collider) return true;
 		return false;
 	}
 
 	private void ProcessStandardMovement() {
-		if (targetPosition.HasValue) {
+		if (movementDirection.HasValue) {
 			movementTime += GameTime.GetDeltaTime(timeChannel);
 
-			Vector3 directionToMove = (targetPosition.Value - transform.position).normalized;
-			Vector3 moveToPosition = transform.position;
-
-			Vector3 attemptMove = GameTime.GetFixedDeltaTime(timeChannel) * CurrentSpeed * directionToMove;
-			if (!WillCollide(moveToPosition + attemptMove, directionToMove, 0.1f)) {
-				moveToPosition += attemptMove;
+			float speed = GameTime.GetDeltaTime(timeChannel) * CurrentSpeed;
+			Vector3 attemptMove = speed * movementDirection.Value;
+			if (!WillCollide(transform.position, movementDirection.Value, speed, 0.1f)) {
+				transform.position += attemptMove;
+			} else if (!WillCollide(transform.position + (stepHeight * Vector3.up), movementDirection.Value, speed, 0.1f)) {
+				transform.position += attemptMove + (stepHeight * Vector3.up);
 			}
 
-			// Rotation
-			Vector3 lookTarget = new Vector3(directionToMove.x, 0, directionToMove.z);
-			transform.rotation = Quaternion.LookRotation(lookTarget, Vector3.up);
+			if (IsGrounded) {
+				// Snap down to floor
+				if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, stepHeight + (collider.height * 0.5f))) {
+					float targetPos = hit.point.y + (collider.height * 0.5f);
+					transform.position = new Vector3(transform.position.x, targetPos, transform.position.z);
+				}
+			}
 
-			rigidbody.MovePosition(moveToPosition);
-			if (transform.position == targetPosition.Value) targetPosition = null;
+			if (rotationType == RotationType.Movement) {
+				// Rotation
+				transform.rotation = Quaternion.LookRotation(movementDirection.Value, Vector3.up);
+			}
+
+			movementDirection = null;
 		} else movementTime = 0;
+
+		if (rotationType == RotationType.Camera) {
+			transform.rotation = Quaternion.LookRotation(camera.GetForwardDirection(), Vector3.up);
+		}
 
 		ApplyJump();
 	}
@@ -150,17 +170,17 @@ public class BaseCharacterController : MonoBehaviour {
 
 	private void ProcessLedgeMovement() {
 		if (currentLedge) {
-			if (targetPosition.HasValue) {
+			if (movementDirection.HasValue) {
 				movementTime += GameTime.GetDeltaTime(timeChannel);
 
-				Vector3 directionToMove = (targetPosition.Value - transform.position).normalized * CurrentSpeed * GameTime.GetFixedDeltaTime(timeChannel);
+				Vector3 directionToMove = CurrentSpeed * GameTime.GetDeltaTime(timeChannel) * movementDirection.Value;
 
 				Vector3 ledgeDirection = currentLedge.GetLedgeDirection();
 
-				Vector3 movementOnLedge = new Vector3(directionToMove.x * ledgeDirection.x, directionToMove.y * ledgeDirection.y, directionToMove.z * ledgeDirection.z);
+				Vector3 movementOnLedge = Vector3.Project(directionToMove, ledgeDirection);
 
 				if (!WillCollide(transform.position + movementOnLedge, ledgeDirection, 0.1f)) {
-					ledgeDistance += movementOnLedge.x + movementOnLedge.y + movementOnLedge.z;
+					ledgeDistance += (movementOnLedge.x + movementOnLedge.y + movementOnLedge.z);
 					if (Mathf.Abs(ledgeDistance) > currentLedge.GetMaxDistance()) {
 						ledgeCooldown = ledgeGrab.regrabCooldown;
 						IsGrounded = false;
@@ -168,14 +188,13 @@ public class BaseCharacterController : MonoBehaviour {
 					}
 				}
 
-				if (transform.position == targetPosition.Value) targetPosition = null;
+				movementDirection = null;
 			} else movementTime = 0;
 		}
 
-		rigidbody.MovePosition(currentLedge.transform.position + (currentLedge.GetLedgeDirection() * ledgeDistance) + transform.TransformVector(ledgeGrab.holdingOffset));
+		transform.position = currentLedge.transform.position + (currentLedge.GetLedgeDirection() * ledgeDistance) + transform.TransformVector(ledgeGrab.holdingOffset);
 
 		IsGrounded = true;
-		rigidbody.velocity = new Vector3(rigidbody.velocity.x, 0, rigidbody.velocity.z);
 
 		// Rotation
 		transform.rotation = Quaternion.LookRotation(-currentLedge.GetNormalVector(), Vector3.up);
@@ -185,12 +204,13 @@ public class BaseCharacterController : MonoBehaviour {
 			IsGrounded = false;
 			SetMovementType(MovementType.Standard);
 			ledgeCooldown = ledgeGrab.regrabCooldown;
+			nextJumpForce *= 2;
 		}
 	}
 
 	private void UpdateMovementCooldowns() {
 		if (ledgeCooldown > 0) {
-			ledgeCooldown -= GameTime.GetFixedDeltaTime(timeChannel);
+			ledgeCooldown -= GameTime.GetDeltaTime(timeChannel);
 			if (ledgeCooldown <= 0) {
 				currentLedge = null;
 			}
@@ -201,25 +221,33 @@ public class BaseCharacterController : MonoBehaviour {
 	#region Jump
 	public bool IsGrounded { get; private set; } = true;
 	private float nextJumpForce;
-	
+	private float currentJumpVelocity;
 	private void ApplyJump() {
 		if (nextJumpForce != 0) {
-			rigidbody.velocity += Vector3.up * (Mathf.Sqrt(-2.0f * Physics2D.gravity.y * (jumpHeight * nextJumpForce)));
+			currentJumpVelocity = Mathf.Sqrt(-2.0f * Physics2D.gravity.y * (jumpHeight * nextJumpForce));
 			nextJumpForce = 0;
 			IsGrounded = false;
 		}
 
 		if (!IsGrounded) {
-			if (rigidbody.velocity.y <= 0 && CheckGrounded()) {
+			if (currentJumpVelocity <= 0 && CheckGrounded()) {
 				IsGrounded = true;
-				rigidbody.velocity = new Vector3(rigidbody.velocity.x, 0, rigidbody.velocity.z);
+				currentJumpVelocity = 0;
+
+				if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, stepHeight + (collider.height * 0.5f))) {
+					float targetPos = hit.point.y + (collider.height * 0.5f);
+					transform.position = new Vector3(transform.position.x, targetPos, transform.position.z);
+				}
+			} else {
+				currentJumpVelocity += Physics.gravity.y * GameTime.GetDeltaTime(timeChannel);
+				transform.position += currentJumpVelocity * GameTime.GetDeltaTime(timeChannel) * Vector3.up;
 			}
 		} else {
 			if (!CheckGrounded()) {
 				IsGrounded = false;
 			}
-		
-			rigidbody.velocity = new Vector3(rigidbody.velocity.x, 0, rigidbody.velocity.z);
+
+			currentJumpVelocity = 0;
 		}
 	}
 
@@ -266,17 +294,17 @@ public class BaseCharacterController : MonoBehaviour {
 	#endregion
 
 	#region Interface
-	public void MoveTo(Vector3 newPosition) {
-		targetPosition = newPosition;
+	public void Move(Vector3 newDirection) {
+		movementDirection = newDirection.normalized;
 	}
 
 	public void StopMoving() {
-		targetPosition = null;
+		movementDirection = null;
 	}
 
 	public void WarpTo(Vector3 newPosition, bool cancelMovement = true) {
 		rigidbody.position = newPosition;
-		if (cancelMovement) targetPosition = null;
+		if (cancelMovement) movementDirection = null;
 	}
 
 	public void Jump(float force) {

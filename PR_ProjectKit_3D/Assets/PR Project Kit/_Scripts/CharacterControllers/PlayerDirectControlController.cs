@@ -25,8 +25,6 @@ public class PlayerDirectControlController : MonoBehaviour {
 
 		if (horizontalMovement.Value != 0 || verticalMovement.Value != 0) {
 			UpdateMovement();
-		} else {
-			character.StopMoving();
 		}
 
 		if (jumpControl.RawValue != 0 && character.IsGrounded) {
@@ -40,7 +38,7 @@ public class PlayerDirectControlController : MonoBehaviour {
 
 		Vector3 movement = (forward * verticalMovement.Value + right * horizontalMovement.Value).normalized;
 
-		character.MoveTo(transform.position + (movement * character.CurrentSpeed * 3f));
+		character.Move(movement);
 	}
 
 	private void UpdateMovementType() {

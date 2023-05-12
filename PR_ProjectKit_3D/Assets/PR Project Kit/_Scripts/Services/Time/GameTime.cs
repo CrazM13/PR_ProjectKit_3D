@@ -32,10 +32,15 @@ public static class GameTime {
 	public static float FixedUnscaledDeltaTime => Time.fixedUnscaledDeltaTime;
 
 	public static float GetDeltaTime(string channel) {
-		return Time.deltaTime;
+		return Time.deltaTime * GetTimeScale(channel);
 	}
 
 	public static float GetFixedDeltaTime(string channel) {
-		return Time.fixedDeltaTime;
+		return Time.fixedDeltaTime * GetTimeScale(channel);
+	}
+
+	public static float GetTimeScale(string channel) {
+		if (string.IsNullOrEmpty(channels[channel].Parent)) return channels[channel].TimeScale;
+		return channels[channel].TimeScale * GetTimeScale(channels[channel].Parent);
 	}
 }
