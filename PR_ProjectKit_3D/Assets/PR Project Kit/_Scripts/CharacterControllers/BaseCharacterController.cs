@@ -96,6 +96,8 @@ public class BaseCharacterController : MonoBehaviour {
 		_ => 1
 	};
 
+	private Vector3 FootPoint => new Vector3(collider.bounds.center.x, collider.bounds.min.y, collider.bounds.center.z);
+
 	// Update is called once per frame
 	private void Update() {
 		UpdateMovement();
@@ -119,13 +121,18 @@ public class BaseCharacterController : MonoBehaviour {
 	private bool WillCollide(Vector3 position, Vector3 direction, float distance, float padding = 0) {
 		RaycastHit[] hits;
 
-		float height = collider.height - padding;
-		float radius = collider.radius - (padding * 0.25f);
-		Vector3 pointOffset = (0.25f * height * Vector3.up);
+		float height = collider.height - (collider.radius * 2f);
+		float radius = collider.radius - padding;
+		float normalHeight = Mathf.Max(height, 0);
+		Vector3 pointOffset = (0.5f * normalHeight * Vector3.up);
 
 		hits = Physics.CapsuleCastAll(position + pointOffset, position - pointOffset, radius, direction, distance, -1, QueryTriggerInteraction.Ignore);
 
-		foreach (RaycastHit hit in hits) if (hit.collider != collider) return true;
+		foreach (RaycastHit hit in hits) {
+			if (hit.collider != collider) {
+				return true;
+			}
+		}
 		return false;
 	}
 
@@ -135,19 +142,18 @@ public class BaseCharacterController : MonoBehaviour {
 
 			float speed = GameTime.GetDeltaTime(timeChannel) * CurrentSpeed;
 			Vector3 attemptMove = speed * movementDirection.Value;
-			if (!WillCollide(transform.position, movementDirection.Value, speed, 0.1f)) {
-				transform.position += attemptMove;
-			} else if (!WillCollide(transform.position + (stepHeight * Vector3.up), movementDirection.Value, speed, 0.1f)) {
-				transform.position += attemptMove + (stepHeight * Vector3.up);
+			if (!WillCollide(collider.bounds.center, movementDirection.Value, speed, 0.1f)) {
+				transform.localPosition += attemptMove;
+			} else if (!WillCollide(collider.bounds.center + (stepHeight * Vector3.up), movementDirection.Value, speed, 0.1f)) {
+				transform.localPosition += attemptMove + (stepHeight * Vector3.up);
+
+				SnapToFloor(stepHeight + 1f);
 			}
 
-			if (IsGrounded) {
-				// Snap down to floor
-				if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, stepHeight + (collider.height * 0.5f))) {
-					float targetPos = hit.point.y + (collider.height * 0.5f);
-					transform.position = new Vector3(transform.position.x, targetPos, transform.position.z);
-				}
-			}
+			//if (IsGrounded) {
+			//	// Snap down to floor
+			//	SnapToFloor(stepHeight);
+			//}
 
 			if (rotationType == RotationType.Movement) {
 				// Rotation
@@ -179,7 +185,7 @@ public class BaseCharacterController : MonoBehaviour {
 
 				Vector3 movementOnLedge = Vector3.Project(directionToMove, ledgeDirection);
 
-				if (!WillCollide(transform.position + movementOnLedge, ledgeDirection, 0.1f)) {
+				if (!WillCollide(transform.localPosition + movementOnLedge, ledgeDirection, 0.1f)) {
 					ledgeDistance += (movementOnLedge.x + movementOnLedge.y + movementOnLedge.z);
 					if (Mathf.Abs(ledgeDistance) > currentLedge.GetMaxDistance()) {
 						ledgeCooldown = ledgeGrab.regrabCooldown;
@@ -192,7 +198,7 @@ public class BaseCharacterController : MonoBehaviour {
 			} else movementTime = 0;
 		}
 
-		transform.position = currentLedge.transform.position + (currentLedge.GetLedgeDirection() * ledgeDistance) + transform.TransformVector(ledgeGrab.holdingOffset);
+		transform.localPosition = currentLedge.transform.localPosition + (currentLedge.GetLedgeDirection() * ledgeDistance) + transform.TransformVector(ledgeGrab.holdingOffset);
 
 		IsGrounded = true;
 
@@ -232,15 +238,12 @@ public class BaseCharacterController : MonoBehaviour {
 		if (!IsGrounded) {
 			if (currentJumpVelocity <= 0 && CheckGrounded()) {
 				IsGrounded = true;
-				currentJumpVelocity = 0;
 
-				if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, stepHeight + (collider.height * 0.5f))) {
-					float targetPos = hit.point.y + (collider.height * 0.5f);
-					transform.position = new Vector3(transform.position.x, targetPos, transform.position.z);
-				}
+				SnapToFloor(currentJumpVelocity);
+				currentJumpVelocity = 0;
 			} else {
 				currentJumpVelocity += Physics.gravity.y * GameTime.GetDeltaTime(timeChannel);
-				transform.position += currentJumpVelocity * GameTime.GetDeltaTime(timeChannel) * Vector3.up;
+				transform.localPosition += currentJumpVelocity * GameTime.GetDeltaTime(timeChannel) * Vector3.up;
 			}
 		} else {
 			if (!CheckGrounded()) {
@@ -252,10 +255,16 @@ public class BaseCharacterController : MonoBehaviour {
 	}
 
 	private bool CheckGrounded() {
-		RaycastHit[] hits = Physics.SphereCastAll(new Vector3(collider.bounds.center.x, collider.bounds.center.y - ((0.25f * collider.height) + (collider.radius * 0.25f)), collider.bounds.center.z), collider.radius * 0.75f, Vector3.down, 0.01f, -1, QueryTriggerInteraction.Ignore);
-		
-		foreach (RaycastHit hit in hits) if (hit.collider != collider) return true;
-		return false;
+		if (currentJumpVelocity < 0) return WillCollide(collider.bounds.center, Vector3.down, -currentJumpVelocity * GameTime.GetDeltaTime(timeChannel), 0);
+		return WillCollide(collider.bounds.center, Vector3.down, 0.1f * GameTime.GetDeltaTime(timeChannel), 0);
+	}
+
+	private void SnapToFloor(float maxDistance) {
+		float yDelta = transform.position.y - FootPoint.y;
+		if (Physics.Raycast(collider.bounds.center, Vector3.down, out RaycastHit hit, maxDistance + (collider.height * 0.5f))) {
+			float targetY = hit.point.y + (collider.height * 0.5f) - collider.center.y;
+			transform.position = new Vector3(transform.position.x, targetY, transform.position.z);
+		}
 	}
 	#endregion
 
@@ -290,6 +299,14 @@ public class BaseCharacterController : MonoBehaviour {
 		float difference = hitboxHeight - newHeight;
 
 		return hitboxCenter - (0.5f * difference * Vector3.up);
+	}
+
+	private void OnDrawGizmos() {
+		Color colour = Gizmos.color;
+
+		Gizmos.DrawCube(FootPoint, Vector3.one * 0.1f);
+
+		Gizmos.color = colour;
 	}
 	#endregion
 
@@ -329,9 +346,9 @@ public class BaseCharacterController : MonoBehaviour {
 			ledgeCooldown = -1;
 
 			// Get Distance on Ledge
-			Vector3 worldGrabPosition = transform.position - transform.TransformVector(ledgeGrab.holdingOffset);
+			Vector3 worldGrabPosition = transform.localPosition - transform.TransformVector(ledgeGrab.holdingOffset);
 			Vector3 ledgeDirection = ledge.GetLedgeDirection().normalized;
-			Vector3 point = worldGrabPosition - ledge.transform.position;
+			Vector3 point = worldGrabPosition - ledge.transform.localPosition;
 			ledgeDistance = Vector3.Dot(point, ledgeDirection);
 		}
 	}
