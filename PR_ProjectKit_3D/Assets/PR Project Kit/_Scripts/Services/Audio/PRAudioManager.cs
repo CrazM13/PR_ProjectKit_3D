@@ -71,7 +71,7 @@ public class PRAudioManager : MonoBehaviour {
 		activeAudioSources.RemoveAt(index);
 	}
 
-	private void ResetAudioSource(AudioSource audioSource) {
+	public void ResetAudioSource(AudioSource audioSource) {
 		audioSource.clip = null;
 		audioSource.outputAudioMixerGroup = null;
 		audioSource.mute = false;
