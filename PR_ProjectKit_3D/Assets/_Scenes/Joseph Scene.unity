@@ -690,7 +690,7 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   rotationType: 1
-  stepHeight: 0.1
+  stepHeight: 0.25
   jumpHeight: 2
   timeChannel: CharacterTime
   sprintingSpeedPercentage: 1.25

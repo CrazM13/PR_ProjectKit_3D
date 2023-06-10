@@ -126,7 +126,7 @@ public class BaseCharacterController : MonoBehaviour {
 		float normalHeight = Mathf.Max(height, 0);
 		Vector3 pointOffset = (0.5f * normalHeight * Vector3.up);
 
-		hits = Physics.CapsuleCastAll(position + pointOffset, position - pointOffset, radius, direction, distance, -1, QueryTriggerInteraction.Ignore);
+		hits = Physics.CapsuleCastAll(position + pointOffset, position - pointOffset, radius, direction, distance + (2f * padding), -1, QueryTriggerInteraction.Ignore);
 
 		foreach (RaycastHit hit in hits) {
 			if (hit.collider != collider) {
@@ -144,7 +144,7 @@ public class BaseCharacterController : MonoBehaviour {
 			Vector3 attemptMove = speed * movementDirection.Value;
 			if (!WillCollide(collider.bounds.center, movementDirection.Value, speed, 0.1f)) {
 				transform.localPosition += attemptMove;
-			} else if (!WillCollide(collider.bounds.center + (stepHeight * Vector3.up), movementDirection.Value, speed, 0.1f)) {
+			} else if (IsGrounded && !WillCollide(collider.bounds.center + (stepHeight * Vector3.up), movementDirection.Value, speed, 0.1f)) {
 				transform.localPosition += attemptMove + (stepHeight * Vector3.up);
 
 				SnapToFloor(stepHeight + 1f);
@@ -255,16 +255,50 @@ public class BaseCharacterController : MonoBehaviour {
 	}
 
 	private bool CheckGrounded() {
-		if (currentJumpVelocity < 0) return WillCollide(collider.bounds.center, Vector3.down, -currentJumpVelocity * GameTime.GetDeltaTime(timeChannel), 0);
-		return WillCollide(collider.bounds.center, Vector3.down, 0.1f * GameTime.GetDeltaTime(timeChannel), 0);
+		float distance = stepHeight;
+		if (currentJumpVelocity < 0) {
+			distance = Mathf.Max(distance, -currentJumpVelocity);
+		}
+
+		//if (currentJumpVelocity < 0) return WillCollide(collider.bounds.center, Vector3.down, -currentJumpVelocity * GameTime.GetDeltaTime(timeChannel), 0);
+		return WillCollide(collider.bounds.center, Vector3.down, distance * GameTime.GetDeltaTime(timeChannel), 0);
 	}
 
 	private void SnapToFloor(float maxDistance) {
-		float yDelta = transform.position.y - FootPoint.y;
-		if (Physics.Raycast(collider.bounds.center, Vector3.down, out RaycastHit hit, maxDistance + (collider.height * 0.5f))) {
-			float targetY = hit.point.y + (collider.height * 0.5f) - collider.center.y;
-			transform.position = new Vector3(transform.position.x, targetY, transform.position.z);
+		maxDistance = Mathf.Abs(maxDistance);
+		//float yDelta = transform.position.y - FootPoint.y;
+
+		float newTargetY = GetFloorCollisionHeight(collider.bounds.center, maxDistance, 0.1f);
+		newTargetY += (collider.height * 0.5f) - collider.center.y;
+		if (newTargetY < transform.position.y) {
+			transform.position = new Vector3(transform.position.x, newTargetY, transform.position.z);
 		}
+
+		//if (Physics.Raycast(collider.bounds.center, Vector3.down, out RaycastHit hit, maxDistance + (collider.height * 0.5f))) {
+		//	float targetY = hit.point.y + (collider.height * 0.5f) - collider.center.y;
+		//	Vector3 newPosition = new Vector3(transform.position.x, targetY, transform.position.z);
+		//}
+	}
+
+	private float GetFloorCollisionHeight(Vector3 position, float distance, float padding = 0) {
+		RaycastHit[] hits;
+
+		float height = collider.height - (collider.radius * 2f);
+		float radius = collider.radius - padding;
+		float normalHeight = Mathf.Max(height, 0);
+		Vector3 pointOffset = (0.5f * normalHeight * Vector3.up);
+
+		hits = Physics.CapsuleCastAll(position + pointOffset, position - pointOffset, radius, Vector3.down, distance + (2f * padding), -1, QueryTriggerInteraction.Ignore);
+
+		float yHeight = position.y - distance;
+
+		foreach (RaycastHit hit in hits) {
+			if (hit.collider != collider) {
+				yHeight = Mathf.Max(hit.point.y, yHeight);
+			}
+		}
+
+		return yHeight;
 	}
 	#endregion
 
