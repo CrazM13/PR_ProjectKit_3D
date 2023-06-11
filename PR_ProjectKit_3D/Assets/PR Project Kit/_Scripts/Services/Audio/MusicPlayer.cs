@@ -4,33 +4,63 @@ using UnityEngine;
 
 public class MusicPlayer : MonoBehaviour {
 
+	[Header("Sound Bank")]
 	[SerializeField] private SoundBank musicBank;
+
+	[Header("Transition")]
 	[SerializeField] private AnimationCurve easeIn;
 	[SerializeField] private AnimationCurve easeOut;
+
+	[Header("Settings")]
+	[SerializeField, Tooltip("Sets as the main music player. Only one music player can be registered")] private bool registerToAudioManager = false;
+	[SerializeField, Min(0)] private float volume = 1;
 
 	private AudioSource musicSource;
 	private AudioSource oldMusicSource;
 
-	private float easingTime = -1;
+	private float easeInTime = -1;
+	private float easeOutTime = -1;
 
-	private float MaxEasingTime => Mathf.Max(easeIn.keys[easeIn.length - 1].time, easeOut.keys[easeOut.length - 1].time);
+	private float MaxEaseInTime => easeIn.keys[easeIn.length - 1].time;
+	private float MaxEaseOutTime => easeOut.keys[easeOut.length - 1].time;
+
+	private void Awake() {
+		if (registerToAudioManager) {
+			ServiceLocator.AudioManager.MusicController = this;
+		}
+	}
 
 	private void Update() {
-		if (easingTime >= 0) {
-			easingTime += GameTime.UnscaledDeltaTime;
+		// Ease In
+		if (easeInTime >= 0) {
+			easeInTime += GameTime.UnscaledDeltaTime;
 
 			if (musicSource) {
-				musicSource.volume = easeIn.Evaluate(easingTime);
+				musicSource.volume = easeIn.Evaluate(easeInTime) * volume;
 			}
+
+			if (easeInTime > MaxEaseInTime) {
+				easeInTime = -1;
+			}
+		} else {
+			if (musicSource) {
+				musicSource.volume = volume;
+			}
+		}
+
+		// Easde Out
+		if (easeOutTime >= 0) {
+			easeOutTime += GameTime.UnscaledDeltaTime;
 
 			if (oldMusicSource) {
-				oldMusicSource.volume = easeOut.Evaluate(easingTime);
+				oldMusicSource.volume = easeOut.Evaluate(easeOutTime) * volume;
 			}
 
-			if (easingTime > MaxEasingTime) {
-				easingTime = -1;
+			if (easeOutTime > MaxEaseOutTime) {
+				easeOutTime = -1;
 
 				if (oldMusicSource) {
+					oldMusicSource.Stop();
 					ServiceLocator.AudioManager.ResetAudioSource(oldMusicSource);
 					oldMusicSource = null;
 				}
@@ -42,18 +72,22 @@ public class MusicPlayer : MonoBehaviour {
 		if (musicSource) {
 			// Force dispose of old Old Music
 			if (oldMusicSource) {
+				oldMusicSource.Stop();
 				ServiceLocator.AudioManager.ResetAudioSource(oldMusicSource);
 				oldMusicSource = null;
 			}
 
 			oldMusicSource = musicSource;
 			musicSource = null;
+			easeOutTime = 0;
 		}
 
-		if (index >= 0) musicSource = ServiceLocator.AudioManager.Play(musicBank.GetAt(index));
+		if (index >= 0) {
+			musicSource = ServiceLocator.AudioManager.Play(musicBank.GetAt(index));
+			musicSource.volume = volume;
+		}
 
-		easingTime = 0;
+		easeInTime = 0;
 	}
-
 
 }

@@ -4,8 +4,6 @@ using UnityEngine;
 
 public class TestingMusic : MonoBehaviour {
 
-	[SerializeField] MusicPlayer player;
-
 	// Start is called before the first frame update
 	void Start() {
 
@@ -13,7 +11,7 @@ public class TestingMusic : MonoBehaviour {
 
 	// Update is called once per frame
 	void Update() {
-		if (Input.GetKeyDown(KeyCode.Alpha1)) player.PlayMusic(0);
-		if (Input.GetKeyDown(KeyCode.Alpha2)) player.PlayMusic(1);
+		if (Input.GetKeyDown(KeyCode.Alpha1)) ServiceLocator.AudioManager.MusicController.PlayMusic(0);
+		if (Input.GetKeyDown(KeyCode.Alpha2)) ServiceLocator.AudioManager.MusicController.PlayMusic(1);
 	}
 }

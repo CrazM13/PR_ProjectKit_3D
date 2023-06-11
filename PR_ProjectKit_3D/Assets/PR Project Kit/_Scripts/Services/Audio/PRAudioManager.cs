@@ -4,6 +4,8 @@ using UnityEngine;
 
 public class PRAudioManager : MonoBehaviour {
 
+	public MusicPlayer MusicController { get; set; } = null;
+
 	private Queue<AudioSource> inactiveAudioSources = new Queue<AudioSource>();
 	private List<AudioSource> activeAudioSources = new List<AudioSource>();
 
