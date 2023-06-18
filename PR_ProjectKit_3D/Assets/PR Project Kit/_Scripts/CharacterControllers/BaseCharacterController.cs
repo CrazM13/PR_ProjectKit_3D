@@ -41,12 +41,14 @@ public class BaseCharacterController : MonoBehaviour {
 	[SerializeField] private new CameraControllerBase camera;
 
 	[Header("Settings")]
+	[SerializeField] private LayerMask movementCollisionLayers;
 	[SerializeField] private float movementSpeed = 1;
 	[SerializeField] private AnimationCurve acceleration = AnimationCurve.Constant(0, 1, 1);
 
 	[SerializeField] private RotationType rotationType;
 	[SerializeField] private float stepHeight;
 	[SerializeField] private float jumpHeight;
+	[SerializeField] private LayerMask groundCollisionLayers;
 
 	[SerializeField] private string timeChannel = "CharacterTime";
 
@@ -118,16 +120,16 @@ public class BaseCharacterController : MonoBehaviour {
 		UpdateMovementCooldowns();
 	}
 
-	private bool WillCollide(Vector3 position, Vector3 direction, float distance, float padding = 0) {
-		RaycastHit[] hits;
+	private bool WillCollide(Vector3 position, Vector3 direction, float distance, float padding = 0, int mask = -1) {
 
 		float height = collider.height - (collider.radius * 2f);
 		float radius = collider.radius - padding;
 		float normalHeight = Mathf.Max(height, 0);
 		Vector3 pointOffset = (0.5f * normalHeight * Vector3.up);
 
-		hits = Physics.CapsuleCastAll(position + pointOffset, position - pointOffset, radius, direction, distance + (2f * padding), -1, QueryTriggerInteraction.Ignore);
-
+		RaycastHit[] hits;
+		hits = Physics.CapsuleCastAll(position + pointOffset, position - pointOffset, radius, direction, distance + radius, mask, QueryTriggerInteraction.Ignore);
+		
 		foreach (RaycastHit hit in hits) {
 			if (hit.collider != collider) {
 				return true;
@@ -142,18 +144,13 @@ public class BaseCharacterController : MonoBehaviour {
 
 			float speed = GameTime.GetDeltaTime(timeChannel) * CurrentSpeed;
 			Vector3 attemptMove = speed * movementDirection.Value;
-			if (!WillCollide(collider.bounds.center, movementDirection.Value, speed, 0.1f)) {
+			if (!WillCollide(collider.bounds.center, movementDirection.Value, speed, 0.1f, movementCollisionLayers)) {
 				transform.localPosition += attemptMove;
-			} else if (IsGrounded && !WillCollide(collider.bounds.center + (stepHeight * Vector3.up), movementDirection.Value, speed, 0.1f)) {
+			} else if (IsGrounded && !WillCollide(collider.bounds.center + (stepHeight * Vector3.up), movementDirection.Value, speed, 0.1f, movementCollisionLayers)) {
 				transform.localPosition += attemptMove + (stepHeight * Vector3.up);
 
 				SnapToFloor(stepHeight + 1f);
 			}
-
-			//if (IsGrounded) {
-			//	// Snap down to floor
-			//	SnapToFloor(stepHeight);
-			//}
 
 			if (rotationType == RotationType.Movement) {
 				// Rotation
@@ -260,24 +257,17 @@ public class BaseCharacterController : MonoBehaviour {
 			distance = Mathf.Max(distance, -currentJumpVelocity);
 		}
 
-		//if (currentJumpVelocity < 0) return WillCollide(collider.bounds.center, Vector3.down, -currentJumpVelocity * GameTime.GetDeltaTime(timeChannel), 0);
-		return WillCollide(collider.bounds.center, Vector3.down, distance * GameTime.GetDeltaTime(timeChannel), 0);
+		return WillCollide(collider.bounds.center, Vector3.down, distance * GameTime.GetDeltaTime(timeChannel), 0, groundCollisionLayers);
 	}
 
 	private void SnapToFloor(float maxDistance) {
 		maxDistance = Mathf.Abs(maxDistance);
-		//float yDelta = transform.position.y - FootPoint.y;
 
 		float newTargetY = GetFloorCollisionHeight(collider.bounds.center, maxDistance, 0.1f);
 		newTargetY += (collider.height * 0.5f) - collider.center.y;
 		if (newTargetY < transform.position.y) {
 			transform.position = new Vector3(transform.position.x, newTargetY, transform.position.z);
 		}
-
-		//if (Physics.Raycast(collider.bounds.center, Vector3.down, out RaycastHit hit, maxDistance + (collider.height * 0.5f))) {
-		//	float targetY = hit.point.y + (collider.height * 0.5f) - collider.center.y;
-		//	Vector3 newPosition = new Vector3(transform.position.x, targetY, transform.position.z);
-		//}
 	}
 
 	private float GetFloorCollisionHeight(Vector3 position, float distance, float padding = 0) {
